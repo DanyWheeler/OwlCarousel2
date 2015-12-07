@@ -403,7 +403,10 @@
 	}, {
 		filter: [ 'position' ],
 		run: function() {
-			this.animate(this.coordinates(this._current));
+			//if it's free drag then we don't need to update the position leave it as is.
+			if(!this.settings.freeDrag){
+				this.animate(this.coordinates(this._current));
+			}
 		}
 	}, {
 		filter: [ 'width', 'position', 'items', 'settings' ],
@@ -688,19 +691,11 @@
 	};
 
 	/**
-	 * Handles `touchstart` and `mousedown` events.
-	 * @todo Horizontal swipe threshold as option
-	 * @todo #261
-	 * @protected
-	 * @param {Event} event - The event arguments.
+	 * get current stage.
+	 * @returns {x,y}
 	 */
-	Owl.prototype.onDragStart = function(event) {
-		var stage = null;
-
-		if (event.which === 3) {
-			return;
-		}
-
+	Owl.prototype.currentStage = function(){
+		var stage;
 		if ($.support.transform) {
 			stage = this.$stage.css('transform').replace(/.*\(|\)| /g, '').split(',');
 			stage = {
@@ -711,11 +706,28 @@
 			stage = this.$stage.position();
 			stage = {
 				x: this.settings.rtl ?
-					stage.left + this.$stage.width() - this.width() + this.settings.margin :
+				stage.left + this.$stage.width() - this.width() + this.settings.margin :
 					stage.left,
 				y: stage.top
 			};
 		}
+		return stage;
+	};
+
+	/**
+	 * Handles `touchstart` and `mousedown` events.
+	 * @todo Horizontal swipe threshold as option
+	 * @todo #261
+	 * @protected
+	 * @param {Event} event - The event arguments.
+	 */
+	Owl.prototype.onDragStart = function(event) {
+
+		if (event.which === 3) {
+			return;
+		}
+
+		var stage = this.currentStage();
 
 		if (this.is('animating')) {
 			$.support.transform ? this.animate(stage.x) : this.$stage.stop()
@@ -757,9 +769,8 @@
 	 * @param {Event} event - The event arguments.
 	 */
 	Owl.prototype.onDragMove = function(event) {
-		var minimum = null,
-			maximum = null,
-			pull = null,
+		event.preventDefault();
+		var pull = null,
 			delta = this.difference(this._drag.pointer, this.pointer(event)),
 			stage = this.difference(this._drag.stage.start, delta);
 
@@ -767,22 +778,31 @@
 			return;
 		}
 
-		event.preventDefault();
-
-		if (this.settings.loop) {
-			minimum = this.coordinates(this.minimum());
-			maximum = this.coordinates(this.maximum() + 1) - minimum;
-			stage.x = (((stage.x - minimum) % maximum + maximum) % maximum) + minimum;
-		} else {
-			minimum = this.settings.rtl ? this.coordinates(this.maximum()) : this.coordinates(this.minimum());
-			maximum = this.settings.rtl ? this.coordinates(this.minimum()) : this.coordinates(this.maximum());
-			pull = this.settings.pullDrag ? -1 * delta.x / 5 : 0;
-			stage.x = Math.max(Math.min(stage.x, minimum + pull), maximum + pull);
-		}
+		this.normalizeCoordinate(stage,delta);
 
 		this._drag.stage.current = stage;
 
 		this.animate(stage.x);
+	};
+	/**
+	 * normalize the coordinate to animate.
+	 * @param coordinate{x,y}
+	 */
+	Owl.prototype.normalizeCoordinate = function(coordinate, delta){
+		var minimum = null,
+			maximum = null;
+		delta = delta || {x: 0, y: 0};
+		if (this.settings.loop) {
+			minimum = this.coordinates(this.minimum());
+			maximum = this.coordinates(this.maximum() + 1) - minimum;
+			coordinate.x = (((coordinate.x - minimum) % maximum + maximum) % maximum) + minimum;
+		} else {
+			minimum = this.settings.rtl ? this.coordinates(this.maximum()) : this.coordinates(this.minimum());
+			maximum = this.settings.rtl ? this.coordinates(this.minimum()) : this.coordinates(this.maximum());
+			pull = this.settings.pullDrag ? -1 * delta.x / 5 : 0;
+			coordinate.x = Math.max(Math.min(coordinate.x, minimum + pull), maximum + pull);
+		}
+		return coordinate;
 	};
 
 	/**
@@ -810,7 +830,10 @@
 			this._drag.direction = direction;
 
 			if (Math.abs(delta.x) > 3 || new Date().getTime() - this._drag.time > 300) {
-				this._drag.target.one('click.owl.core', function() { return false; });
+				this._drag.target.one('' +
+					'' +
+					'' +
+					'owl.core', function() { return false; });
 			}
 		}
 
@@ -847,6 +870,17 @@
 				}
 				return position === -1;
 			}, this));
+		}else{
+			// free drag calculate the closest position
+			$.each(coordinates, $.proxy(function(index, value) {
+				if (coordinate > value - pull && coordinate < value + pull) {
+					position = index;
+				} else if (this.op(coordinate, '<', value)
+					&& this.op(coordinate, '>', coordinates[index + 1] || value - width)) {
+					position = direction === 'left' ? index + 1 : index;
+				}
+				return position === -1;
+			}, this));
 		}
 
 		if (!this.settings.loop) {
@@ -867,7 +901,7 @@
 	 * @public
 	 * @param {Number} coordinate - The coordinate in pixels.
 	 */
-	Owl.prototype.animate = function(coordinate) {
+	Owl.prototype.animate = function(coordinate, direction, justAnimate) {
 		var animate = this.speed() > 0;
 
 		this.is('animating') && this.onTransitionEnd();
@@ -890,6 +924,10 @@
 			this.$stage.css({
 				left: coordinate + 'px'
 			});
+		}
+		//if it's free drag and it's not just animate , then recalculate the position.
+		if(this.settings.freeDrag && !justAnimate){
+			this.current(this.closest(coordinate, this._drag.direction));
 		}
 	};
 
@@ -966,7 +1004,7 @@
 
 		this.suppress([ 'translate', 'translated' ]);
 
-		this.animate(this.coordinates(position));
+		this.animate(this.coordinates(position), null, true);
 
 		this.release([ 'translate', 'translated' ]);
 	};

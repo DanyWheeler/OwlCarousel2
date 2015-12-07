@@ -88,7 +88,7 @@
 				}
 			}, this),
 			'changed.owl.carousel': $.proxy(function(e) {
-				if (e.namespace && e.property.name == 'position') {
+				if (this._initialized && e.namespace && e.property.name == 'position') {
 					this.draw();
 				}
 			}, this),

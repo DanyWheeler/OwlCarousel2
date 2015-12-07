@@ -45,7 +45,7 @@
 					} else {
 						this.stop();
 					}
-				} else if (e.namespace && e.property.name === 'position') {
+				} else if (e.namespace && (e.property.name === 'position' || e.property.name === 'coordinate')) {
 					//console.log('play?', e);
 					if (this._core.settings.autoplay) {
 						this._setAutoPlayInterval();
@@ -94,7 +94,8 @@
 		autoplay: false,
 		autoplayTimeout: 5000,
 		autoplayHoverPause: false,
-		autoplaySpeed: false
+		autoplaySpeed: false,
+		autoplayStep: 10,
 	};
 
 	/**
@@ -130,7 +131,15 @@
 			if (this._paused || this._core.is('busy') || this._core.is('interacting') || document.hidden) {
 				return;
 			}
-			this._core.next(speed || this._core.settings.autoplaySpeed);
+			if(this._core.settings.freeDrag){
+				var stage = this._core.currentStage();
+				stage.x -= this._core.settings.autoplayStep;
+				this._core.normalizeCoordinate(stage);
+				this._core.animate(stage.x);
+				this._core.trigger('changed', { property: { name: 'coordinate', value: stage } });
+			}else{
+				this._core.next(speed || this._core.settings.autoplaySpeed);
+			}
 		}, this), timeout || this._core.settings.autoplayTimeout);
 	};
 
